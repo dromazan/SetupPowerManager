@@ -4,6 +4,7 @@ from guizero import *
 import glob
 import time
 
+r_label= ['USB HUB','MAIN CAM','FOCUSER','FAN','S.M. Heat','F.WHEEL','NC','NC']
 
 def get_serial_ports_list():
     if sys.platform.startswith('win'):
@@ -112,42 +113,42 @@ Text(app, text=" ", grid=[1,0])
 
 
 #Relay #1
-relay1_label = Text(app, text="Relay 1", grid=[2,0])
+relay1_label = Text(app, text=r_label[0], grid=[2,0], align='left')
 relay1_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(0), grid=[2,2])
 relay1_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(0), grid=[2,3])
 
 #Relay #2
-relay2_label = Text(app, text="Relay 2", grid=[3,0])
+relay2_label = Text(app, text=r_label[1], grid=[3,0], align='left')
 relay2_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(1), grid=[3,2])
 relay2_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(1), grid=[3,3])
 
 #Relay #1
-relay3_label = Text(app, text="Relay 3", grid=[4,0])
+relay3_label = Text(app, text=r_label[2], grid=[4,0], align='left')
 relay3_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(2), grid=[4,2])
 relay3_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(2), grid=[4,3])
 
 #Relay #1
-relay4_label = Text(app, text="Relay 4", grid=[5,0])
+relay4_label = Text(app, text=r_label[3], grid=[5,0], align='left')
 relay4_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(3), grid=[5,2])
 relay4_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(3), grid=[5,3])
 
 #Relay #1
-relay5_label = Text(app, text="Relay 5", grid=[6,0])
+relay5_label = Text(app, text=r_label[4], grid=[6,0], align='left')
 relay5_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(4), grid=[6,2])
 relay5_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(4), grid=[6,3])
 
 #Relay #1
-relay6_label = Text(app, text="Relay 6", grid=[7,0])
+relay6_label = Text(app, text=r_label[5], grid=[7,0], align='left')
 relay6_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(5), grid=[7,2])
 relay6_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(5), grid=[7,3])
 
 #Relay #1
-relay7_label = Text(app, text="Relay 7", grid=[8,0])
+relay7_label = Text(app, text=r_label[6], grid=[8,0], align='left')
 relay7_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(6), grid=[8,2])
 relay7_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(6), grid=[8,3])
 
 #Relay #1
-relay8_label = Text(app, text="Relay 8", grid=[9,0])
+relay8_label = Text(app, text=r_label[7], grid=[9,0], align='left')
 relay8_connect = PushButton(app, text='Connect', command=lambda: switch_relay_on(7), grid=[9,2])
 relay8_disconnect = PushButton(app, text='Disconnect', command=lambda: switch_relay_off(7), grid=[9,3])
 
