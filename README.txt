@@ -1,0 +1,1 @@
+pyinstaller -w PowerManager_v2.py
