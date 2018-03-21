@@ -2,9 +2,86 @@ from tkinter import *
 import sys
 import glob
 import serial
+import time
 from PIL import Image, ImageTk
+import queue
+import threading
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.figure import Figure
+from random import uniform
+import numpy as np
 
 r_label = ['USB HUB', 'MAIN CAM', 'FOCUSER', 'FAN', 'S.M. HEAT', 'F.WHEEL', 'CAM HEAT', 'OAG HEAT']
+voltage_list = []
+current_list = []
+t_ambient_list = []
+t_mirror_list = []
+
+# for plotting test
+# for i in range(360):
+#     voltage_list.append(uniform(11.4, 12.6))
+#     current_list.append(uniform(0.5, 3.7))
+
+
+class SerialThread(threading.Thread):
+    def __init__(self, queue):
+        threading.Thread.__init__(self)
+        self.queue = queue
+        self._stop_event = threading.Event()
+
+    def run(self):
+        global ser
+        while not self.stopped():
+            if ser.is_open:
+                text = ser.read()
+                text = serial.unicode(text, errors='ignore')
+                print('serial received - %s' % text)
+                self.queue.put(text)
+                process_queue()
+            else:
+                self.stop()
+
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
+
+def process_queue():
+    global queue
+    while queue.qsize():
+        try:
+            msg = queue.get()
+            print('from queue msg - %s' % msg)
+            if msg.startwith("v"):
+                voltage = float(msg[1:])
+                voltage_list.append(voltage)
+                if len(voltage_list) > 720:
+                    voltage_list.pop(0)
+            elif msg.startwith("c"):
+                current = float(msg[1:])
+                current_list.append(current)
+                if len(current_list) > 720:
+                    current_list.pop(0)
+            elif msg.startwith("a"):
+                t_ambient = float(msg[1:])
+                t_ambient_list.append(t_ambient)
+                if len(t_ambient_list) > 720:
+                    t_ambient_list.pop(0)
+            elif msg.startwith("m"):
+                t_mirror = float(msg[1:])
+                t_mirror_list.append(t_mirror)
+                if len(t_mirror_list) > 720:
+                    t_ambient_list.pop(0)
+            elif len(msg) == 8:
+                upd_power_icons(msg)
+
+        except queue.Empty:
+            # just on general principles, although we don't
+            # expect this branch to be taken in this case
+            pass
 
 
 def get_serial_ports_list():
@@ -42,6 +119,7 @@ def open_port():
     ser.open()
     if ser.is_open:
         print('port is connected')
+        time.sleep(2)
         conn_state_label.configure(image=port_state_img_connected)
         master.update()
         request_state()
@@ -88,10 +166,13 @@ def switch_relay_off(relay):
 def request_state():
     request = '!!'
     ser.write(request.encode(encoding='UTF-8'))
-    pins_state_str = ser.readline().decode("utf-8")
+    # pins_state_str = ser.readline().decode("utf-8")
     # print(pins_state_str)
-    # pins = list(pins_state_str)
-    print(pins_state_str)
+    # # pins = list(pins_state_str)
+    # print(pins_state_str)
+
+
+def upd_power_icons(pins_state_str):
     for i, l in enumerate(pins_state_str):
         if l == '0':
             power_state_label[i].configure(image=power_state_img_off)
@@ -102,6 +183,42 @@ def request_state():
             master.update()
             i += 1
 
+
+def expand_master():
+    print(show_graph.get())
+    if show_graph.get() == 1:
+        print('changing width to 900')
+        mf.configure(width=900)
+        #mf.pack_propagate(0)
+        master.update()
+    elif show_graph.get() == 0:
+        print('changing width to 400')
+        mf.configure(width=400)
+        #mf.pack_propagate(0)
+        master.update()
+
+
+def plot_power_chart(t_ambient, t_mirror):
+    my_dpi = 144
+    fig = Figure(figsize=(3.2, 2), dpi=144)
+    fig.subplots_adjust(0., 0.1, 0.8, 1.)
+
+    line1, = fig.add_subplot(111).plot(t_ambient, color='red', linewidth=0.5, label='ambient')
+    line2, = fig.add_subplot(111).plot(t_mirror, color='green', linewidth=0.5, label='mirror')
+    fig.add_subplot(111).set_xticklabels(np.arange(0, len(t_mirror), step=50), fontdict={'fontsize': 5})
+    fig.add_subplot(111).grid()
+    fig.add_subplot(111).legend(bbox_to_anchor=(1., 1), handles=[line1, line2], loc=2, fontsize=5)
+    canvas = FigureCanvasTkAgg(fig, master=power_graph_frame)
+    canvas.draw()
+    canvas.get_tk_widget().pack(side=TOP, fill=BOTH, expand=1)
+
+
+    # toolbar = NavigationToolbar2TkAgg(canvas, power_graph_frame)
+    # toolbar.update()
+    # canvas._tkcanvas.pack(side=TOP, fill=BOTH, expand=1)
+
+def plot_temp_chart():
+    pass
 
 master = Tk()
 master.resizable(False, False)
@@ -115,7 +232,7 @@ port_label.place(x=5, y=10)
 
 var = StringVar(master)
 var.set(ports[0])  # initial value
-print(var)
+print('var is %s' % var)
 
 # Selec port drop down
 option_frame = Frame(master, height=30, width=100)
@@ -147,8 +264,6 @@ port_state_ico_disconnected = Image.open("disconnected.png")
 
 port_state_img_connected = ImageTk.PhotoImage(port_state_ico_connected)
 port_state_img_disconnected = ImageTk.PhotoImage(port_state_ico_disconnected)
-
-# conn_state_frame = Frame(master, height=30, width=30, bg='green')
 
 conn_state_label = Label(master, image=port_state_img_disconnected)
 conn_state_label.place(x=365, y=2)
@@ -234,18 +349,15 @@ off_btn =[off_btn0,
           off_btn7]
 
 
-#Relay img
-relay_ico = Image.open('relay.png')
-relay_img = ImageTk.PhotoImage(relay_ico)
-
-relay_frame = Frame(master, height=200, width=109)
-relay_label = Label(relay_frame, image=relay_img)
-relay_label.pack()
-relay_frame.pack()
-relay_frame.place(x=275, y=50)
-
-
-
+# #Relay img
+# relay_ico = Image.open('relay.png')
+# relay_img = ImageTk.PhotoImage(relay_ico)
+#
+# relay_frame = Frame(master, height=200, width=109)
+# relay_label = Label(relay_frame, image=relay_img)
+# relay_label.pack()
+# relay_frame.pack()
+# relay_frame.place(x=275, y=50)
 
 # On/Off icon
 power_state_icon_off = Image.open('off.png')
@@ -302,5 +414,38 @@ for i in range(0, 8):
     power_state_label[i].pack()
     power_state_frame[i].pack()
     power_state_frame[i].place(x=210, y=50 + i * 35)
+
+power_lable = Label(master, text="Power State:", font=("Helvetica", 12))
+power_lable.place(x=275, y=50)
+
+voltage_label = Label(master, text = "Voltage = %s V" % "N/A")
+voltage_label.place(x=275, y=80)
+
+current_label = Label(master, text="Current = %s A" % "N/A")
+current_label.place(x=275, y=110)
+
+temp_label = Label(master, text="Temperature:", font=("Helvetica", 12))
+temp_label.place(x=275, y=150)
+
+ambient_t_label = Label(master, text = "T Ambient = %s C" % "N/A")
+ambient_t_label.place(x=275, y=180)
+
+mirror_t_label = Label(master, text="T Mirror = %s C" % "N/A")
+mirror_t_label.place(x=275, y=210)
+
+show_graph = IntVar()
+show_graph_cbox = Checkbutton(master, text="Show graphs", variable=show_graph, command=expand_master)
+show_graph_cbox.place(x=275, y=300)
+
+power_graph_label = Label(master, text='Temperature:', font=('Helvetice', 12))
+power_graph_label.place(x=420, y=2)
+
+
+power_graph_frame = Frame(master, width=465, height=300, bd=3)
+power_graph_frame.place(x=420, y=25)
+
+plot_power_chart(t_ambient_list, t_mirror_list)
+
+queue = queue.Queue()
 
 mainloop()
