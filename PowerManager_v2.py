@@ -1,27 +1,31 @@
 from tkinter import *
-import sys
-import glob
+from sys import platform
+from glob import glob
 import serial
 import time
 from PIL import Image, ImageTk
 import queue
 import threading
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from random import uniform
-import numpy as np
+
 
 r_label = ['USB HUB', 'MAIN CAM', 'FOCUSER', 'FAN', 'S.M. HEAT', 'F.WHEEL', 'CAM HEAT', 'OAG HEAT']
 voltage_list = []
 current_list = []
 t_ambient_list = []
 t_mirror_list = []
+number_of_measurements = 360
+x_ticks_list = []
 
-# for plotting test
-# for i in range(360):
-#     voltage_list.append(uniform(11.4, 12.6))
-#     current_list.append(uniform(0.5, 3.7))
+
+#for plotting test
+def test_dummy_temp():
+    t_ambient_list.append(uniform(11.4, 12.6))
+    t_mirror_list.append(uniform(0.5, 3.7))
+    print(t_ambient_list)
+    print(t_mirror_list)
 
 
 class SerialThread(threading.Thread):
@@ -34,7 +38,7 @@ class SerialThread(threading.Thread):
         global ser
         while not self.stopped():
             if ser.is_open:
-                text = ser.read()
+                text = ser.readline()
                 text = serial.unicode(text, errors='ignore')
                 print('serial received - %s' % text)
                 self.queue.put(text)
@@ -49,48 +53,68 @@ class SerialThread(threading.Thread):
         return self._stop_event.is_set()
 
 
+def upd_voltage_list(v):
+    global voltage_list
+    voltage_list.append(v)
+    voltage_list = voltage_list[-number_of_measurements:]
+    voltage_label.configure(text="Voltage = %s V" % v)
+
+def upd_current_list(c):
+    global current_list, x_ticks_list
+    current_list.append(c)
+    current_list = current_list[-number_of_measurements:]
+    current_label.configure(text="Current = %s A" % c)
+
+
+def upd_ambient_list(a):
+    global t_ambient_list
+    t_ambient_list.append(a)
+    t_ambient_list = t_ambient_list[-number_of_measurements:]
+    ambient_t_label.configure(text = "T Ambient = %s C" % a)
+
+
+def upd_mirror_list(m):
+    global x_ticks_list
+    global t_mirror_list
+    t_mirror_list.append(m)
+    t_mirror_list = t_mirror_list[-number_of_measurements:]
+    mirror_t_label.configure(text = "T Mirror = %s C" % m)
+    x_ticks_list.append(time.strftime('%H:%M:%S'))
+    x_ticks_list = x_ticks_list[-number_of_measurements:]
+
 def process_queue():
     global queue
     while queue.qsize():
         try:
             msg = queue.get()
-            print('from queue msg - %s' % msg)
-            if msg.startwith("v"):
+            if msg.startswith("v"):
                 voltage = float(msg[1:])
-                voltage_list.append(voltage)
-                if len(voltage_list) > 720:
-                    voltage_list.pop(0)
-            elif msg.startwith("c"):
+                upd_voltage_list(voltage)
+            elif msg.startswith("c"):
                 current = float(msg[1:])
-                current_list.append(current)
-                if len(current_list) > 720:
-                    current_list.pop(0)
-            elif msg.startwith("a"):
+                upd_current_list(current)
+            elif msg.startswith("a"):
                 t_ambient = float(msg[1:])
-                t_ambient_list.append(t_ambient)
-                if len(t_ambient_list) > 720:
-                    t_ambient_list.pop(0)
-            elif msg.startwith("m"):
+                upd_ambient_list(t_ambient)
+            elif msg.startswith("m"):
                 t_mirror = float(msg[1:])
-                t_mirror_list.append(t_mirror)
-                if len(t_mirror_list) > 720:
-                    t_ambient_list.pop(0)
-            elif len(msg) == 8:
+                upd_mirror_list(t_mirror)
+            elif len(msg) == 10 and msg[0:8].isdigit():
                 upd_power_icons(msg)
 
-        except queue.Empty:
-            # just on general principles, although we don't
-            # expect this branch to be taken in this case
+        except:
+            print('queue message is not processed')
             pass
-
+        finally:
+            plot_temp_chart(t_ambient_list, t_mirror_list)
 
 def get_serial_ports_list():
-    if sys.platform.startswith('win'):
+    if platform.startswith('win'):
         ports = ['COM%s' % (i + 1) for i in range(256)]
-    elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
-        ports = glob.glob('/dev/tty[A-Za-z]*')
-    elif sys.platform.startswith('darwin'):
-        ports = glob.glob('/dev/tty.*')
+    elif platform.startswith('linux') or platform.startswith('cygwin'):
+        ports = glob('/dev/tty[A-Za-z]*')
+    elif platform.startswith('darwin'):
+        ports = glob('/dev/tty.*')
     else:
         raise EnvironmentError('Unsupported platform')
 
@@ -119,7 +143,10 @@ def open_port():
     ser.open()
     if ser.is_open:
         print('port is connected')
-        time.sleep(2)
+        #time.sleep(2) # For arduinos on CH340 chip
+        thread = SerialThread(queue)
+        thread.daemon = True
+        thread.start()
         conn_state_label.configure(image=port_state_img_connected)
         master.update()
         request_state()
@@ -144,7 +171,6 @@ def close_port():
 
 def send_command(relay, param):
     request = '{}{}'.format(relay, param)
-    print(request)
     print(request.encode(encoding='UTF-8'))
     ser.write(request.encode(encoding='UTF-8'))
 
@@ -166,13 +192,10 @@ def switch_relay_off(relay):
 def request_state():
     request = '!!'
     ser.write(request.encode(encoding='UTF-8'))
-    # pins_state_str = ser.readline().decode("utf-8")
-    # print(pins_state_str)
-    # # pins = list(pins_state_str)
-    # print(pins_state_str)
 
 
 def upd_power_icons(pins_state_str):
+    print('upd_power_icons')
     for i, l in enumerate(pins_state_str):
         if l == '0':
             power_state_label[i].configure(image=power_state_img_off)
@@ -189,39 +212,46 @@ def expand_master():
     if show_graph.get() == 1:
         print('changing width to 900')
         mf.configure(width=900)
-        #mf.pack_propagate(0)
         master.update()
     elif show_graph.get() == 0:
         print('changing width to 400')
         mf.configure(width=400)
-        #mf.pack_propagate(0)
         master.update()
 
 
-def plot_power_chart(t_ambient, t_mirror):
+fig = Figure(figsize=(3.2, 2.1), dpi=144)
+fig.subplots_adjust(0.07, 0.1, 0.8, 1.)
+sbplot = fig.add_subplot(111)
+
+line1, = sbplot.plot(t_ambient_list, color='royalblue', linewidth=0.5, label='ambient')
+line2, = sbplot.plot(t_mirror_list, color='firebrick', linewidth=0.5, label='mirror')
+
+sbplot.tick_params(labelsize=5)
+sbplot.grid()
+sbplot.legend(bbox_to_anchor=(1., 1.), handles=[line1, line2], loc=2, fontsize=5)
+#sbplot.set_xticklabels(x_ticks_list)
+
+def plot_temp_chart(t_ambient, t_mirror):
     my_dpi = 144
-    fig = Figure(figsize=(3.2, 2), dpi=144)
-    fig.subplots_adjust(0., 0.1, 0.8, 1.)
 
-    line1, = fig.add_subplot(111).plot(t_ambient, color='red', linewidth=0.5, label='ambient')
-    line2, = fig.add_subplot(111).plot(t_mirror, color='green', linewidth=0.5, label='mirror')
-    fig.add_subplot(111).set_xticklabels(np.arange(0, len(t_mirror), step=50), fontdict={'fontsize': 5})
-    fig.add_subplot(111).grid()
-    fig.add_subplot(111).legend(bbox_to_anchor=(1., 1), handles=[line1, line2], loc=2, fontsize=5)
-    canvas = FigureCanvasTkAgg(fig, master=power_graph_frame)
+    sbplot.clear()
+    sbplot.tick_params(labelsize=5)
+    sbplot.grid()
+
+    sbplot.legend(bbox_to_anchor=(1., 1.), handles=[line1, line2], loc=2, fontsize=5)
+    sbplot.plot(t_ambient, color='royalblue', linewidth=1, label='ambient')
+    sbplot.plot(t_mirror, color='firebrick', linewidth=1, label='mirror')
+
+    #sbplot.set_xticklabels(x_ticks_list, rotation=50)
     canvas.draw()
-    canvas.get_tk_widget().pack(side=TOP, fill=BOTH, expand=1)
-
 
     # toolbar = NavigationToolbar2TkAgg(canvas, power_graph_frame)
     # toolbar.update()
     # canvas._tkcanvas.pack(side=TOP, fill=BOTH, expand=1)
 
-def plot_temp_chart():
-    pass
 
 master = Tk()
-master.resizable(False, False)
+#master.resizable(False, False)
 master.title("Setup PowerManagement")
 mf = Frame(master, height=340, width=400)
 mf.pack_propagate(0)  # don't shrink
@@ -349,16 +379,6 @@ off_btn =[off_btn0,
           off_btn7]
 
 
-# #Relay img
-# relay_ico = Image.open('relay.png')
-# relay_img = ImageTk.PhotoImage(relay_ico)
-#
-# relay_frame = Frame(master, height=200, width=109)
-# relay_label = Label(relay_frame, image=relay_img)
-# relay_label.pack()
-# relay_frame.pack()
-# relay_frame.place(x=275, y=50)
-
 # On/Off icon
 power_state_icon_off = Image.open('off.png')
 power_state_icon_on = Image.open('on.png')
@@ -366,14 +386,14 @@ power_state_icon_on = Image.open('on.png')
 power_state_img_on = ImageTk.PhotoImage(power_state_icon_on)
 power_state_img_off = ImageTk.PhotoImage(power_state_icon_off)
 
-power_state_frame0 = Frame(master, height=30, width=30, bg='red')
-power_state_frame1 = Frame(master, height=30, width=30, bg='red')
-power_state_frame2 = Frame(master, height=30, width=30, bg='red')
-power_state_frame3 = Frame(master, height=30, width=30, bg='red')
-power_state_frame4 = Frame(master, height=30, width=30, bg='red')
-power_state_frame5 = Frame(master, height=30, width=30, bg='red')
-power_state_frame6 = Frame(master, height=30, width=30, bg='red')
-power_state_frame7 = Frame(master, height=30, width=30, bg='red')
+power_state_frame0 = Frame(master, height=30, width=30)
+power_state_frame1 = Frame(master, height=30, width=30)
+power_state_frame2 = Frame(master, height=30, width=30)
+power_state_frame3 = Frame(master, height=30, width=30)
+power_state_frame4 = Frame(master, height=30, width=30)
+power_state_frame5 = Frame(master, height=30, width=30)
+power_state_frame6 = Frame(master, height=30, width=30)
+power_state_frame7 = Frame(master, height=30, width=30)
 
 power_state_frame = [power_state_frame0,
                      power_state_frame1,
@@ -440,11 +460,14 @@ show_graph_cbox.place(x=275, y=300)
 power_graph_label = Label(master, text='Temperature:', font=('Helvetice', 12))
 power_graph_label.place(x=420, y=2)
 
-
-power_graph_frame = Frame(master, width=465, height=300, bd=3)
+power_graph_frame = Frame(master, width=465, height=320, bd=3)
 power_graph_frame.place(x=420, y=25)
 
-plot_power_chart(t_ambient_list, t_mirror_list)
+canvas = FigureCanvasTkAgg(fig, master=power_graph_frame)
+canvas.draw()
+canvas.get_tk_widget().pack(side=TOP, fill=BOTH, expand=1)
+
+plot_temp_chart(voltage_list, current_list)
 
 queue = queue.Queue()
 
