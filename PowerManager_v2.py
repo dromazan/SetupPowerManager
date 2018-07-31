@@ -10,7 +10,6 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from random import uniform
 
-
 r_label = ['USB HUB', 'MAIN CAM', 'FOCUSER', 'FAN', 'S.M. HEAT', 'F.WHEEL', 'CAM HEAT', 'OAG HEAT']
 voltage_list = []
 current_list = []
@@ -20,7 +19,7 @@ number_of_measurements = 360
 x_ticks_list = []
 
 
-#for plotting test
+# for plotting test
 def test_dummy_temp():
     t_ambient_list.append(uniform(11.4, 12.6))
     t_mirror_list.append(uniform(0.5, 3.7))
@@ -40,7 +39,7 @@ class SerialThread(threading.Thread):
             if ser.is_open:
                 text = ser.readline()
                 text = serial.unicode(text, errors='ignore')
-                print('serial received - %s' % text)
+                print(f'serial received - {text}')
                 self.queue.put(text)
                 process_queue()
             else:
@@ -57,20 +56,21 @@ def upd_voltage_list(v):
     global voltage_list
     voltage_list.append(v)
     voltage_list = voltage_list[-number_of_measurements:]
-    voltage_label.configure(text="Voltage = %s V" % v)
+    voltage_label.configure(text=f"Voltage = {v} V")
+
 
 def upd_current_list(c):
     global current_list, x_ticks_list
     current_list.append(c)
     current_list = current_list[-number_of_measurements:]
-    current_label.configure(text="Current = %s A" % c)
+    current_label.configure(text=f"Current = {c} A")
 
 
 def upd_ambient_list(a):
     global t_ambient_list
     t_ambient_list.append(a)
     t_ambient_list = t_ambient_list[-number_of_measurements:]
-    ambient_t_label.configure(text = "T Ambient = %s C" % a)
+    ambient_t_label.configure(text=f"T Ambient = {a} C")
 
 
 def upd_mirror_list(m):
@@ -78,9 +78,10 @@ def upd_mirror_list(m):
     global t_mirror_list
     t_mirror_list.append(m)
     t_mirror_list = t_mirror_list[-number_of_measurements:]
-    mirror_t_label.configure(text = "T Mirror = %s C" % m)
+    mirror_t_label.configure(text=f'T Mirror = {m} C')
     x_ticks_list.append(time.strftime('%H:%M:%S'))
     x_ticks_list = x_ticks_list[-number_of_measurements:]
+
 
 def process_queue():
     global queue
@@ -108,9 +109,10 @@ def process_queue():
         finally:
             plot_temp_chart(t_ambient_list, t_mirror_list)
 
+
 def get_serial_ports_list():
     if platform.startswith('win'):
-        ports = ['COM%s' % (i + 1) for i in range(256)]
+        ports = [f'COM{i + 1}' for i in range(256)]
     elif platform.startswith('linux') or platform.startswith('cygwin'):
         ports = glob('/dev/tty[A-Za-z]*')
     elif platform.startswith('darwin'):
@@ -143,7 +145,7 @@ def open_port():
     ser.open()
     if ser.is_open:
         print('port is connected')
-        #time.sleep(2) # For arduinos on CH340 chip
+        # time.sleep(2) # For arduinos on CH340 chip
         thread = SerialThread(queue)
         thread.daemon = True
         thread.start()
@@ -170,7 +172,7 @@ def close_port():
 
 
 def send_command(relay, param):
-    request = '{}{}'.format(relay, param)
+    request = f'{relay}{param}'
     print(request.encode(encoding='UTF-8'))
     ser.write(request.encode(encoding='UTF-8'))
 
@@ -229,7 +231,10 @@ line2, = sbplot.plot(t_mirror_list, color='firebrick', linewidth=0.5, label='mir
 sbplot.tick_params(labelsize=5)
 sbplot.grid()
 sbplot.legend(bbox_to_anchor=(1., 1.), handles=[line1, line2], loc=2, fontsize=5)
-#sbplot.set_xticklabels(x_ticks_list)
+
+
+# sbplot.set_xticklabels(x_ticks_list)
+
 
 def plot_temp_chart(t_ambient, t_mirror):
     my_dpi = 144
@@ -242,7 +247,7 @@ def plot_temp_chart(t_ambient, t_mirror):
     sbplot.plot(t_ambient, color='royalblue', linewidth=1, label='ambient')
     sbplot.plot(t_mirror, color='firebrick', linewidth=1, label='mirror')
 
-    #sbplot.set_xticklabels(x_ticks_list, rotation=50)
+    # sbplot.set_xticklabels(x_ticks_list, rotation=50)
     canvas.draw()
 
     # toolbar = NavigationToolbar2TkAgg(canvas, power_graph_frame)
@@ -251,7 +256,7 @@ def plot_temp_chart(t_ambient, t_mirror):
 
 
 master = Tk()
-#master.resizable(False, False)
+# master.resizable(False, False)
 master.title("Setup PowerManagement")
 mf = Frame(master, height=340, width=400)
 mf.pack_propagate(0)  # don't shrink
@@ -262,9 +267,9 @@ port_label.place(x=5, y=10)
 
 var = StringVar(master)
 var.set(ports[0])  # initial value
-print('var is %s' % var)
+print(f'var is {var}')
 
-# Selec port drop down
+# Select port drop down
 option_frame = Frame(master, height=30, width=100)
 option_frame.pack_propagate(0)  # don't shrink
 option_frame.pack()
@@ -314,13 +319,13 @@ on_frame6 = Frame(master, height=30, width=50)
 on_frame7 = Frame(master, height=30, width=50)
 
 on_frame = [on_frame0,
-             on_frame1,
-             on_frame2,
-             on_frame3,
-             on_frame4,
-             on_frame5,
-             on_frame6,
-             on_frame7]
+            on_frame1,
+            on_frame2,
+            on_frame3,
+            on_frame4,
+            on_frame5,
+            on_frame6,
+            on_frame7]
 
 on_btn0 = Button(on_frame0, text='ON', font=("Helvetica", 10), command=lambda: switch_relay_on(0))
 on_btn1 = Button(on_frame1, text='ON', font=("Helvetica", 10), command=lambda: switch_relay_on(1))
@@ -331,7 +336,7 @@ on_btn5 = Button(on_frame5, text='ON', font=("Helvetica", 10), command=lambda: s
 on_btn6 = Button(on_frame6, text='ON', font=("Helvetica", 10), command=lambda: switch_relay_on(6))
 on_btn7 = Button(on_frame7, text='ON', font=("Helvetica", 10), command=lambda: switch_relay_on(7))
 
-on_btn =[on_btn0,
+on_btn = [on_btn0,
           on_btn1,
           on_btn2,
           on_btn3,
@@ -339,7 +344,6 @@ on_btn =[on_btn0,
           on_btn5,
           on_btn6,
           on_btn7]
-
 
 # OFF BUTTONS
 off_frame0 = Frame(master, height=30, width=50)
@@ -369,15 +373,14 @@ off_btn5 = Button(off_frame5, text='OFF', font=("Helvetica", 10), command=lambda
 off_btn6 = Button(off_frame6, text='OFF', font=("Helvetica", 10), command=lambda: switch_relay_off(6))
 off_btn7 = Button(off_frame7, text='OFF', font=("Helvetica", 10), command=lambda: switch_relay_off(7))
 
-off_btn =[off_btn0,
-          off_btn1,
-          off_btn2,
-          off_btn3,
-          off_btn4,
-          off_btn5,
-          off_btn6,
-          off_btn7]
-
+off_btn = [off_btn0,
+           off_btn1,
+           off_btn2,
+           off_btn3,
+           off_btn4,
+           off_btn5,
+           off_btn6,
+           off_btn7]
 
 # On/Off icon
 power_state_icon_off = Image.open('off.png')
@@ -413,14 +416,14 @@ power_state_label5 = Label(power_state_frame5, image=power_state_img_off)
 power_state_label6 = Label(power_state_frame6, image=power_state_img_off)
 power_state_label7 = Label(power_state_frame7, image=power_state_img_off)
 
-power_state_label =[power_state_label0,
-                    power_state_label1,
-                    power_state_label2,
-                    power_state_label3,
-                    power_state_label4,
-                    power_state_label5,
-                    power_state_label6,
-                    power_state_label7]
+power_state_label = [power_state_label0,
+                     power_state_label1,
+                     power_state_label2,
+                     power_state_label3,
+                     power_state_label4,
+                     power_state_label5,
+                     power_state_label6,
+                     power_state_label7]
 
 for i in range(0, 8):
     on_frame[i].pack_propagate(0)
@@ -438,7 +441,7 @@ for i in range(0, 8):
 power_lable = Label(master, text="Power State:", font=("Helvetica", 12))
 power_lable.place(x=275, y=50)
 
-voltage_label = Label(master, text = "Voltage = %s V" % "N/A")
+voltage_label = Label(master, text="Voltage = %s V" % "N/A")
 voltage_label.place(x=275, y=80)
 
 current_label = Label(master, text="Current = %s A" % "N/A")
@@ -447,7 +450,7 @@ current_label.place(x=275, y=110)
 temp_label = Label(master, text="Temperature:", font=("Helvetica", 12))
 temp_label.place(x=275, y=150)
 
-ambient_t_label = Label(master, text = "T Ambient = %s C" % "N/A")
+ambient_t_label = Label(master, text="T Ambient = %s C" % "N/A")
 ambient_t_label.place(x=275, y=180)
 
 mirror_t_label = Label(master, text="T Mirror = %s C" % "N/A")
